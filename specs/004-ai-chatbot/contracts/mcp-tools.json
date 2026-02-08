@@ -1,0 +1,339 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MCP Tools for Todo Task Management",
+  "description": "Five stateless MCP tools for natural language task operations. Each tool validates user_id ownership and returns standardized responses.",
+  "version": "1.0.0",
+  "tools": [
+    {
+      "name": "add_task",
+      "description": "Create a new task for the authenticated user. Validates user_id and title length. Returns task_id and status.",
+      "inputSchema": {
+        "type": "object",
+        "required": ["user_id", "title"],
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Authenticated user UUID (must match JWT claim)"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Task title"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 1000,
+            "nullable": true,
+            "description": "Optional task description"
+          }
+        }
+      },
+      "outputSchema": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["task_id", "status", "title"],
+            "properties": {
+              "task_id": {
+                "type": "integer",
+                "description": "Created task ID"
+              },
+              "status": {
+                "type": "string",
+                "enum": ["created"],
+                "description": "Operation status"
+              },
+              "title": {
+                "type": "string",
+                "description": "Task title"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["error", "code"],
+            "properties": {
+              "error": {
+                "type": "string",
+                "description": "Error message"
+              },
+              "code": {
+                "type": "string",
+                "enum": ["VALIDATION_ERROR", "UNAUTHORIZED"],
+                "description": "Error code"
+              }
+            }
+          }
+        ]
+      },
+      "examples": [
+        {
+          "input": {
+            "user_id": "123e4567-e89b-12d3-a456-426614174000",
+            "title": "Buy groceries",
+            "description": null
+          },
+          "output": {
+            "task_id": 5,
+            "status": "created",
+            "title": "Buy groceries"
+          }
+        }
+      ]
+    },
+    {
+      "name": "list_tasks",
+      "description": "Retrieve tasks for the authenticated user, optionally filtered by status (all, pending, or completed). Returns array of tasks.",
+      "inputSchema": {
+        "type": "object",
+        "required": ["user_id"],
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Authenticated user UUID"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["all", "pending", "completed"],
+            "default": "all",
+            "description": "Filter by task status"
+          }
+        }
+      },
+      "outputSchema": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["tasks"],
+            "properties": {
+              "tasks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["id", "title", "completed", "created_at"],
+                  "properties": {
+                    "id": {"type": "integer"},
+                    "title": {"type": "string"},
+                    "description": {"type": "string", "nullable": true},
+                    "completed": {"type": "boolean"},
+                    "created_at": {"type": "string", "format": "date-time"}
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["error", "code"],
+            "properties": {
+              "error": {"type": "string"},
+              "code": {"type": "string", "enum": ["UNAUTHORIZED"]}
+            }
+          }
+        ]
+      },
+      "examples": [
+        {
+          "input": {
+            "user_id": "123e4567-e89b-12d3-a456-426614174000",
+            "status": "pending"
+          },
+          "output": {
+            "tasks": [
+              {"id": 1, "title": "Buy groceries", "description": null, "completed": false, "created_at": "2026-01-27T10:00:00Z"},
+              {"id": 2, "title": "Call mom", "description": "Tonight", "completed": false, "created_at": "2026-01-27T11:00:00Z"}
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "complete_task",
+      "description": "Mark a task as completed. Validates user owns the task before updating. Returns task_id and status.",
+      "inputSchema": {
+        "type": "object",
+        "required": ["user_id", "task_id"],
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Authenticated user UUID"
+          },
+          "task_id": {
+            "type": "integer",
+            "description": "Task ID to mark complete"
+          }
+        }
+      },
+      "outputSchema": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["task_id", "status", "title"],
+            "properties": {
+              "task_id": {"type": "integer"},
+              "status": {"type": "string", "enum": ["completed"]},
+              "title": {"type": "string"}
+            }
+          },
+          {
+            "type": "object",
+            "required": ["error", "code"],
+            "properties": {
+              "error": {"type": "string"},
+              "code": {"type": "string", "enum": ["NOT_FOUND", "UNAUTHORIZED"]}
+            }
+          }
+        ]
+      },
+      "examples": [
+        {
+          "input": {
+            "user_id": "123e4567-e89b-12d3-a456-426614174000",
+            "task_id": 5
+          },
+          "output": {
+            "task_id": 5,
+            "status": "completed",
+            "title": "Buy groceries"
+          }
+        }
+      ]
+    },
+    {
+      "name": "delete_task",
+      "description": "Delete a task. Validates user owns the task before deletion. Returns task_id and status.",
+      "inputSchema": {
+        "type": "object",
+        "required": ["user_id", "task_id"],
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Authenticated user UUID"
+          },
+          "task_id": {
+            "type": "integer",
+            "description": "Task ID to delete"
+          }
+        }
+      },
+      "outputSchema": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["task_id", "status", "title"],
+            "properties": {
+              "task_id": {"type": "integer"},
+              "status": {"type": "string", "enum": ["deleted"]},
+              "title": {"type": "string"}
+            }
+          },
+          {
+            "type": "object",
+            "required": ["error", "code"],
+            "properties": {
+              "error": {"type": "string"},
+              "code": {"type": "string", "enum": ["NOT_FOUND", "UNAUTHORIZED"]}
+            }
+          }
+        ]
+      },
+      "examples": [
+        {
+          "input": {
+            "user_id": "123e4567-e89b-12d3-a456-426614174000",
+            "task_id": 5
+          },
+          "output": {
+            "task_id": 5,
+            "status": "deleted",
+            "title": "Buy groceries"
+          }
+        }
+      ]
+    },
+    {
+      "name": "update_task",
+      "description": "Update task title and/or description. Validates user owns the task. At least one of title or description must be provided. Returns task_id and status.",
+      "inputSchema": {
+        "type": "object",
+        "required": ["user_id", "task_id"],
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Authenticated user UUID"
+          },
+          "task_id": {
+            "type": "integer",
+            "description": "Task ID to update"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "nullable": true,
+            "description": "New task title (optional)"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 1000,
+            "nullable": true,
+            "description": "New task description (optional)"
+          }
+        }
+      },
+      "outputSchema": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["task_id", "status", "title"],
+            "properties": {
+              "task_id": {"type": "integer"},
+              "status": {"type": "string", "enum": ["updated"]},
+              "title": {"type": "string"}
+            }
+          },
+          {
+            "type": "object",
+            "required": ["error", "code"],
+            "properties": {
+              "error": {"type": "string"},
+              "code": {"type": "string", "enum": ["NOT_FOUND", "UNAUTHORIZED", "VALIDATION_ERROR"]}
+            }
+          }
+        ]
+      },
+      "examples": [
+        {
+          "input": {
+            "user_id": "123e4567-e89b-12d3-a456-426614174000",
+            "task_id": 5,
+            "title": "Buy groceries and fruits",
+            "description": "Include organic options"
+          },
+          "output": {
+            "task_id": 5,
+            "status": "updated",
+            "title": "Buy groceries and fruits"
+          }
+        }
+      ]
+    }
+  ],
+  "constraints": {
+    "stateless": "All tools must be pure functions with no instance variables or shared state",
+    "ownership_validation": "Each tool must validate user_id parameter matches resource ownership before any database operation",
+    "standardized_responses": "Success responses must include {task_id, status, title}. Error responses must include {error, code}",
+    "database_sessions": "Tools use database session per invocation (no persistent connections)",
+    "error_codes": [
+      "NOT_FOUND - Resource does not exist or user does not own it",
+      "UNAUTHORIZED - user_id validation failed",
+      "VALIDATION_ERROR - Input parameters failed validation (length, format, etc.)"
+    ]
+  }
+}

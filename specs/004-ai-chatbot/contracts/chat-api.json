@@ -1,0 +1,291 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Todo AI Chatbot API",
+    "version": "1.0.0",
+    "description": "Natural language task management chat endpoint"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8000",
+      "description": "Development server"
+    },
+    {
+      "url": "https://todo-backend.railway.app",
+      "description": "Production server (Railway)"
+    }
+  ],
+  "paths": {
+    "/api/{user_id}/chat": {
+      "post": {
+        "summary": "Send chat message to AI assistant",
+        "description": "Process user message and return AI assistant response with optional tool call transparency. Supports stateless conversation management with database-backed history.",
+        "operationId": "chatWithAssistant",
+        "tags": ["Chat"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Authenticated user UUID (must match JWT user_id claim)"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              },
+              "examples": {
+                "newConversation": {
+                  "summary": "Start new conversation",
+                  "value": {
+                    "message": "Add a task to buy groceries",
+                    "conversation_id": null
+                  }
+                },
+                "continueConversation": {
+                  "summary": "Continue existing conversation",
+                  "value": {
+                    "message": "Show me my tasks",
+                    "conversation_id": "550e8400-e29b-41d4-a716-446655440000"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response with AI assistant message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatResponse"
+                },
+                "examples": {
+                  "taskCreated": {
+                    "summary": "Task created via natural language",
+                    "value": {
+                      "conversation_id": "550e8400-e29b-41d4-a716-446655440000",
+                      "response": "Got it! I've added 'Buy groceries' to your task list.",
+                      "tool_calls": [
+                        {
+                          "tool": "add_task",
+                          "parameters": {
+                            "user_id": "123e4567-e89b-12d3-a456-426614174000",
+                            "title": "Buy groceries",
+                            "description": null
+                          },
+                          "result": {
+                            "task_id": 5,
+                            "status": "created",
+                            "title": "Buy groceries"
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "tasksListed": {
+                    "summary": "Tasks listed via natural language",
+                    "value": {
+                      "conversation_id": "550e8400-e29b-41d4-a716-446655440000",
+                      "response": "You have 3 pending tasks: 1. Buy groceries, 2. Call mom tonight, 3. Project deadline",
+                      "tool_calls": [
+                        {
+                          "tool": "list_tasks",
+                          "parameters": {
+                            "user_id": "123e4567-e89b-12d3-a456-426614174000",
+                            "status": "pending"
+                          },
+                          "result": {
+                            "tasks": [
+                              {"id": 1, "title": "Buy groceries", "completed": false},
+                              {"id": 2, "title": "Call mom tonight", "completed": false},
+                              {"id": 3, "title": "Project deadline", "completed": false}
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "detail": "Message too long (max 10,000 characters)"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid JWT token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "detail": "Not authenticated"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - user_id mismatch",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "detail": "Forbidden - user_id mismatch"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Conversation not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "detail": "Conversation not found"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "detail": "I'm having trouble connecting right now. Please try again in a moment."
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT token from Phase II authentication (BETTER_AUTH_SECRET)"
+      }
+    },
+    "schemas": {
+      "ChatRequest": {
+        "type": "object",
+        "required": ["message"],
+        "properties": {
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 10000,
+            "description": "User message content in natural language",
+            "example": "Add a task to buy groceries"
+          },
+          "conversation_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Existing conversation ID (null to start new conversation)",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          }
+        }
+      },
+      "ChatResponse": {
+        "type": "object",
+        "required": ["conversation_id", "response"],
+        "properties": {
+          "conversation_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Conversation ID for subsequent messages",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "response": {
+            "type": "string",
+            "description": "AI assistant response in natural language",
+            "example": "Got it! I've added 'Buy groceries' to your task list."
+          },
+          "tool_calls": {
+            "type": "array",
+            "description": "Optional array of MCP tool invocations for transparency",
+            "items": {
+              "$ref": "#/components/schemas/ToolCall"
+            }
+          }
+        }
+      },
+      "ToolCall": {
+        "type": "object",
+        "required": ["tool", "parameters", "result"],
+        "properties": {
+          "tool": {
+            "type": "string",
+            "enum": ["add_task", "list_tasks", "complete_task", "delete_task", "update_task"],
+            "description": "MCP tool name",
+            "example": "add_task"
+          },
+          "parameters": {
+            "type": "object",
+            "description": "Tool input parameters",
+            "example": {
+              "user_id": "123e4567-e89b-12d3-a456-426614174000",
+              "title": "Buy groceries"
+            }
+          },
+          "result": {
+            "type": "object",
+            "description": "Tool execution result",
+            "example": {
+              "task_id": 5,
+              "status": "created",
+              "title": "Buy groceries"
+            }
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": ["detail"],
+        "properties": {
+          "detail": {
+            "type": "string",
+            "description": "Human-readable error message",
+            "example": "Message too long (max 10,000 characters)"
+          }
+        }
+      }
+    }
+  }
+}
