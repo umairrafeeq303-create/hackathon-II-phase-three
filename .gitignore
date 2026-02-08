@@ -48,3 +48,4 @@ out/
 # Database
 *.db
 *.sqlite
+ENV_VARS_REFERENCE.md
